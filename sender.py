@@ -10,8 +10,9 @@ MAX_BYTES = 6000
 def receiveRequest(serversocket):
     data, addr = serversocket.recvfrom(MAX_BYTES)
     request = struct.unpack_from("!cII",data)
-    length = request[2]
-    fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
+    # length = request[2]
+    # fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
+    fileName = data[9:].decode('utf-8')
     print("file name recieved : "+fileName)
     return fileName, addr
 
@@ -45,15 +46,18 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--port")
     parser.add_argument("-g", "--requester_port")
     parser.add_argument("-r", "--rate")
-    parser.add_argument("-q", "--seq_no")
     parser.add_argument("-l", "--length")
+    parser.add_argument("-f", "--f_hostname")
+    parser.add_argument("-e", "--f_port")
+    parser.add_argument("-i", "--priority")
+    parser.add_argument("-t", "--timeout")
     args = parser.parse_args()
     
     serversocket = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     serversocket.bind((socket.gethostname(), int(args.port)))
     
     filename, address = receiveRequest(serversocket)
-    sequence = int(args.seq_no)
+    sequence = 1
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
         for i in range(0,len(bytes),int(args.length)):
@@ -66,7 +70,7 @@ if __name__ == "__main__":
             print("length: ",len(section))
             print("payload: ",section.decode('utf-8')[0:min(len(section),4)])
             print("")
-            sequence += len(section)
+            sequence += 1
             time.sleep(1.0/int(args.rate))
         sendEnd(address[0],int(args.requester_port))
         print("END Packet")
@@ -76,6 +80,8 @@ if __name__ == "__main__":
         print("length: ",0)
         print("payload: ")
         print("")
+
+    print("Percent of packets lost: !!!!!Bruh Moment!!!!!")
         
 
     serversocket.close()
