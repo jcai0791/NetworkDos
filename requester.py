@@ -14,8 +14,19 @@ def makeRequestPacket(filename,window):
 
 def sendRequest(hostName,port, filename,window):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+    payload = makeRequestPacket(filename,window)
+    
     sock.sendto(makeRequestPacket(filename,window), (hostName, port))
 
+def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
+    packet = struct.pack(f"!BIHIHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
+    return packet
+
+def decapsulate(packet):
+    header = struct.unpack_from("!BIHIHI",packet)
+    length = header[5]
+    payload = struct.unpack_from(f"!{length}s",packet,offset=17)[0]
+    return header,payload
 def receivePackets(sock):
     end = False
     text = ""
