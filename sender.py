@@ -9,14 +9,24 @@ MAX_BYTES = 6000
 
 def receiveRequest(serversocket):
     data, addr = serversocket.recvfrom(MAX_BYTES)
-    request = struct.unpack_from("!cII",data)
-    # length = request[2]
+    outHeader,payload = decapsulate(data)
+    request = struct.unpack_from("!cII",payload)
+    window = request[2]
     # fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
-    fileName = data[9:].decode('utf-8')
+    fileName = payload[9:].decode('utf-8')
     print("file name recieved : "+fileName)
-    return fileName, addr
+    return fileName, addr, window
 
 
+def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
+    packet = struct.pack(f"!BIHIHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
+    return packet
+
+def decapsulate(packet):
+    header = struct.unpack_from("!BIHIHI",packet)
+    length = header[5]
+    payload = struct.unpack_from(f"!{length}s",packet,offset=17)[0]
+    return header,payload
 
 def readFile(filename, b):
     bytearr = []
@@ -40,7 +50,23 @@ def sendEnd(address, port):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.sendto(makeEndPacket(), (address, port))
     
+def printData(address,sequence,section):
+    print("DATA Packet")
+    print("send time: ",datetime.utcnow())
+    print("requester addr: ",address)
+    print("Sequence num: ",sequence)
+    print("length: ",len(section))
+    print("payload: ",section.decode('utf-8')[0:min(len(section),4)])
+    print("")
 
+def printEnd(address, sequence):
+    print("END Packet")
+    print("send time: ",datetime.utcnow())
+    print("requester addr: ",address)
+    print("Sequence num: ",sequence)
+    print("length: ",0)
+    print("payload: ")
+    print("")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port")
@@ -56,30 +82,18 @@ if __name__ == "__main__":
     serversocket = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     serversocket.bind((socket.gethostname(), int(args.port)))
     
-    filename, address = receiveRequest(serversocket)
+    filename, address, window = receiveRequest(serversocket)
     sequence = 1
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
         for i in range(0,len(bytes),int(args.length)):
             section = bytes[i:min(i+int(args.length),len(bytes))]
             sendData(address[0],int(args.requester_port),section,sequence)
-            print("DATA Packet")
-            print("send time: ",datetime.utcnow())
-            print("requester addr: ",address)
-            print("Sequence num: ",sequence)
-            print("length: ",len(section))
-            print("payload: ",section.decode('utf-8')[0:min(len(section),4)])
-            print("")
+            printData(address,sequence,section)
             sequence += 1
             time.sleep(1.0/int(args.rate))
         sendEnd(address[0],int(args.requester_port))
-        print("END Packet")
-        print("send time: ",datetime.utcnow())
-        print("requester addr: ",address)
-        print("Sequence num: ",sequence)
-        print("length: ",0)
-        print("payload: ")
-        print("")
+        printEnd(address,sequence)
 
     print("Percent of packets lost: !!!!!Bruh Moment!!!!!")
         

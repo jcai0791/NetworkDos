@@ -37,7 +37,9 @@ def parseTable(fileName, selfHostname, selfPort):
                 lossProb = int(row[7])
                 #TODO
 
-
+def forwardPacket(packet, nextHopIp, nextHopPort):
+    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+    sock.sendto(packet,(nextHopIp,nextHopPort))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -53,7 +55,7 @@ if __name__ == "__main__":
     sock.bind((socket.gethostname(), int(args.port)))
     sock.setblocking(0)
 
-    
+
     while(True):
         try:
             packet, address = sock.recvfrom(MAX_BYTES)
@@ -71,6 +73,8 @@ if __name__ == "__main__":
             destAdd = header[3]
             destPort = header[4]
             type = getType(payload)
+            
+
 
             
 

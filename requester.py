@@ -12,44 +12,70 @@ def makeRequestPacket(filename,window):
     byteString =bytes(filename,'utf-8')
     return struct.pack(f"!cII{len(byteString)}s",b'R',0,window,byteString)
 
-def sendRequest(hostName,port, filename,window):
+def sendRequest(destHostname,destPort, srcPort, filename,window, emulatorName, emulatorPort):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     payload = makeRequestPacket(filename,window)
-    
-    sock.sendto(makeRequestPacket(filename,window), (hostName, port))
+    ownIP = socket.gethostbyname(socket.gethostname())
+    packet = encapsulate(1,ownIP,srcPort,socket.gethostbyname(destHostname),destPort,payload)
+    sock.sendto(packet, (emulatorName, emulatorPort))
+
+def makeAckPacket(sequenceNum):
+    return struct.pack(f"!cII",b'A',sequenceNum,0)
+
+def sendAck(destIP,destPort,srcPort,emulatorName,emulatorPort, sequenceNum):
+    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+    payload = makeAckPacket(sequenceNum)
+    ownIP = socket.gethostbyname(socket.gethostname())
+    packet = encapsulate(1,ownIP,srcPort,destIP,destPort,payload)
+    sock.sendto(packet, (emulatorName, emulatorPort))
 
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     packet = struct.pack(f"!BIHIHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
     return packet
 
 def decapsulate(packet):
-    header = struct.unpack_from("!BIHIHI",packet)
-    length = header[5]
+    outerHeader = struct.unpack_from("!BIHIHI",packet)
+    length = outerHeader[5]
     payload = struct.unpack_from(f"!{length}s",packet,offset=17)[0]
-    return header,payload
-def receivePackets(sock):
+    return outerHeader,payload
+
+def printData(address,sequence,section):
+    print("DATA Packet")
+    print("send time: ",datetime.utcnow())
+    print("requester addr: ",address)
+    print("Sequence num: ",sequence)
+    print("length: ",len(section))
+    print("payload: ",section.decode('utf-8')[0:min(len(section),4)])
+    print("")
+
+def printEnd(address, sequence):
+    print("END Packet")
+    print("send time: ",datetime.utcnow())
+    print("requester addr: ",address)
+    print("Sequence num: ",sequence)
+    print("length: ",0)
+    print("payload: ")
+    print("")
+
+def receivePackets(sock,emulatorName,emulatorPort,ownPort):
     end = False
     text = ""
     totalPackets = 0
     totalLength = 0
     startTime = datetime.utcnow()
+    
     while not end:
         data, addr = sock.recvfrom(MAX_BYTES)
-        header = struct.unpack_from("!cII",data)
+        outerHeader, payload = decapsulate(data)
+        header = struct.unpack_from("!cII",payload)
         length = header[2]
         totalPackets+=1 if header[0] != b'E' else 0
         totalLength+=length
+        receivedMessages = defaultdict(lambda : [])
         if header[0]==b'E':
             end = True
             endTime = datetime.utcnow()
-            print("END Packet")
-            print("recv time: ",endTime)
-            print("sender addr: ",addr)
-            print("Sequence num: ",header[1])
-            print("length: ",0)
-            print("payload: ")
-            print("")
-
+            printEnd(addr,header[1])
             milliseconds = (endTime-startTime)/timedelta(milliseconds=1)
             print("Summary")
             print("sender addr: ",addr)
@@ -58,8 +84,11 @@ def receivePackets(sock):
             print("Average packets/second: ", totalPackets*1000/milliseconds)
             print("Duration: ", milliseconds, " ms")
         else:
-            payload = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
-            text+=payload
+            received = struct.unpack_from(f"!{length}s",payload,offset=9)[0].decode('utf-8')
+            #text+=received
+            receivedMessages[header[1]] = received
+            sendAck(outerHeader[1],outerHeader[2],ownPort,emulatorName,emulatorPort,header[1])
+
             # print("DATA Packet")
             # print("recv time: ",datetime.utcnow())
             # print("sender addr: ",addr)
@@ -67,6 +96,9 @@ def receivePackets(sock):
             # print("length: ",length)
             # print("payload: ",payload[0:min(len(payload),4)])
             # print("")
+
+    #TODO: Write text to file. It is right now stored in receivedMessages. Sort it and write.
+
     return text
 
 
@@ -93,6 +125,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     d = parseTracker()
     window = int(args.window)
+    f_port = int(args.f_port)
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.bind((socket.gethostname(), int(args.port)))
 
@@ -101,8 +134,8 @@ if __name__ == "__main__":
     for i in d[args.fileoption]:
         id = i[0]
         #hostname, port, filename
-        sendRequest(i[1],i[2],args.fileoption,window)
-        text = receivePackets(sock)
+        sendRequest(i[1],i[2],int(args.port),args.fileoption,window,args.f_hostname,f_port)
+        text = receivePackets(sock,args.f_hostname,f_port)
         print("<------FULL TEXT------>")
         print(text)
         with open(args.fileoption, "a") as f:
