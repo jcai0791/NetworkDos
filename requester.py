@@ -8,6 +8,7 @@ from collections import defaultdict
 import os 
 MAX_BYTES = 6000
 
+
 def makeRequestPacket(filename,window):
     byteString =bytes(filename,'utf-8')
     return struct.pack(f"!cII{len(byteString)}s",b'R',0,window,byteString)
@@ -15,8 +16,8 @@ def makeRequestPacket(filename,window):
 def sendRequest(destHostname,destPort, srcPort, filename,window, emulatorName, emulatorPort):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     payload = makeRequestPacket(filename,window)
-    ownIP = socket.gethostbyname(socket.gethostname())
-    packet = encapsulate(1,ownIP,srcPort,socket.gethostbyname(destHostname),destPort,payload)
+    ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
+    packet = encapsulate(1,ownIP,srcPort,socket.inet_aton(socket.gethostbyname(destHostname)),destPort,payload)
     sock.sendto(packet, (emulatorName, emulatorPort))
 
 def makeAckPacket(sequenceNum):
@@ -25,19 +26,19 @@ def makeAckPacket(sequenceNum):
 def sendAck(destIP,destPort,srcPort,emulatorName,emulatorPort, sequenceNum):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     payload = makeAckPacket(sequenceNum)
-    ownIP = socket.gethostbyname(socket.gethostname())
+    ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
     packet = encapsulate(1,ownIP,srcPort,destIP,destPort,payload)
     sock.sendto(packet, (emulatorName, emulatorPort))
 
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
-    packet = struct.pack(f"!BIHIHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
+    packet = struct.pack(f"!B4sH4sHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
     return packet
 
 def decapsulate(packet):
-    outerHeader = struct.unpack_from("!BIHIHI",packet)
-    length = outerHeader[5]
+    header = struct.unpack_from("!B4sH4sHI",packet)
+    length = header[5]
     payload = struct.unpack_from(f"!{length}s",packet,offset=17)[0]
-    return outerHeader,payload
+    return header,payload
 
 def printData(address,sequence,section):
     print("DATA Packet")
@@ -57,23 +58,28 @@ def printEnd(address, sequence):
     print("payload: ")
     print("")
 
-def receivePackets(sock,emulatorName,emulatorPort,ownPort):
-    end = False
+def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMessages= defaultdict(lambda : [])):
+    end = 0
     text = ""
     totalPackets = 0
     totalLength = 0
     startTime = datetime.utcnow()
-    
-    while not end:
+    ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
+    #sock.setblocking(0)
+
+
+    #[(sourceAdd,sourcePort)][SeqNo][Text]
+    while end!=numSenders:
         data, addr = sock.recvfrom(MAX_BYTES)
         outerHeader, payload = decapsulate(data)
+        if(outerHeader[3]!=ownIP):
+            continue
         header = struct.unpack_from("!cII",payload)
         length = header[2]
         totalPackets+=1 if header[0] != b'E' else 0
         totalLength+=length
-        receivedMessages = defaultdict(lambda : [])
         if header[0]==b'E':
-            end = True
+            end +=1
             endTime = datetime.utcnow()
             printEnd(addr,header[1])
             milliseconds = (endTime-startTime)/timedelta(milliseconds=1)
@@ -86,7 +92,8 @@ def receivePackets(sock,emulatorName,emulatorPort,ownPort):
         else:
             received = struct.unpack_from(f"!{length}s",payload,offset=9)[0].decode('utf-8')
             #text+=received
-            receivedMessages[header[1]] = received
+
+            receivedMessages[(outerHeader[1],outerHeader[2])].append((header[1],received))
             sendAck(outerHeader[1],outerHeader[2],ownPort,emulatorName,emulatorPort,header[1])
 
             # print("DATA Packet")
@@ -97,9 +104,9 @@ def receivePackets(sock,emulatorName,emulatorPort,ownPort):
             # print("payload: ",payload[0:min(len(payload),4)])
             # print("")
 
-    #TODO: Write text to file. It is right now stored in receivedMessages. Sort it and write.
-
-    return text
+    #TODO: Write text to file. It is right  now stored in receivedMessages. Sort it and write.
+    #Return a dictionary of [(senderIP,senderHost)][seqno][text]
+    return receivedMessages
 
 
 def parseTracker():
@@ -131,13 +138,18 @@ if __name__ == "__main__":
 
     with open(args.fileoption, "w+") as f:
         pass
+    numSenders = len(d[args.fileoption])
     for i in d[args.fileoption]:
         id = i[0]
         #hostname, port, filename
         sendRequest(i[1],i[2],int(args.port),args.fileoption,window,args.f_hostname,f_port)
-        text = receivePackets(sock,args.f_hostname,f_port)
-        print("<------FULL TEXT------>")
-        print(text)
-        with open(args.fileoption, "a") as f:
-            f.write(text)
+    senderTexts = receivePackets(sock,args.f_hostname,f_port,int(args.port),numSenders)
+    for i in d[args.fileoption]:
+        senderIP = socket.inet_aton(socket.gethostbyname(i[1]))
+        senderPort = i[2]
+        senderTexts[senderIP, senderPort] = sorted(senderTexts[senderIP, senderPort], key = lambda x : x[0])
+        for fragment in senderTexts[(senderIP,senderPort)]:
+            #fragment is (seqno, text)
+            with open(args.fileoption, "a") as f:
+                f.write(fragment[1])
 
