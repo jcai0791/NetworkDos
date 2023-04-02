@@ -62,6 +62,8 @@ def log(packet, logFile, reason):
         
 def forwardPacket(packet, nextHopIp, nextHopPort):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+    print("IP: ",nextHopIp)
+    print("Port: ",nextHopPort)
     sock.sendto(packet,(nextHopIp,nextHopPort))
 
 async def sendPacket(next,packet,file,type):
@@ -108,7 +110,6 @@ if __name__ == "__main__":
             header, payload = decapsulate(packet)
             destAdd = header[3]
             destPort = header[4]
-            type = getType(payload)
             priority = header[0]
             if(not table[(destAdd,destPort)]):
                 log(packet,args.log,"No forwarding entry found")
@@ -119,13 +120,17 @@ if __name__ == "__main__":
             else:
                 log(packet,args.log, f"Queue {priority} full")
 
-            #send
-            if(not DELAYING):
-                for prio in range(0,3):
-                    if(PRIOQ[prio]):
-                        sentPacket = PRIOQ[prio].pop()
-                        asyncio.run(sendPacket(table[(destAdd,destPort)],sentPacket,args.log,type))
-                        break
+        #send
+        if(not DELAYING):
+            for prio in range(0,3):
+                if(PRIOQ[prio]):
+                    sentPacket = PRIOQ[prio].pop()
+                    header, payload = decapsulate(sentPacket)
+                    destAdd = header[3]
+                    destPort = header[4]
+                    type = getType(payload)
+                    asyncio.run(sendPacket(table[(destAdd,destPort)],sentPacket,args.log,type))
+                    break
 
 
 
