@@ -91,21 +91,10 @@ def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMe
             print("Duration: ", milliseconds, " ms")
         else:
             received = struct.unpack_from(f"!{length}s",payload,offset=9)[0].decode('utf-8')
-            #text+=received
 
             receivedMessages[(outerHeader[1],outerHeader[2])].append((header[1],received))
             sendAck(outerHeader[1],outerHeader[2],ownPort,emulatorName,emulatorPort,header[1])
 
-            # print("DATA Packet")
-            # print("recv time: ",datetime.utcnow())
-            # print("sender addr: ",addr)
-            # print("Sequence num: ",header[1])
-            # print("length: ",length)
-            # print("payload: ",payload[0:min(len(payload),4)])
-            # print("")
-
-    #TODO: Write text to file. It is right  now stored in receivedMessages. Sort it and write.
-    #Return a dictionary of [(senderIP,senderHost)][seqno][text]
     return receivedMessages
 
 

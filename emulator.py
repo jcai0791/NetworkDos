@@ -46,12 +46,7 @@ def parseTable(fileName, selfHostname, selfPort):
                 d[(destHost, destPort)] = (nextHost,nextPort, delay, lossProb) 
         return d
 
-#Each log event must include:
-# source hostname and port
-# intended destination host name and port
-# time of loss (to millisecond resolution)
-# priority level of the packet
-# size of the payload.
+#Logs a dropped packet
 def log(packet, logFile, reason):
     outerHeader,payload = decapsulate(packet)
     with open(logFile, "a") as f:

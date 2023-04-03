@@ -4,7 +4,7 @@ import struct
 from datetime import datetime
 import os
 import time
-
+import errno
 MAX_BYTES = 6000
 
 
@@ -39,6 +39,28 @@ def receiveRequest(serversocket):
     print("file name recieved : "+fileName)
     return fileName, addr, window, outHeader
 
+def giveUp(seqNum):
+    print(f"Error: Retried sending packet {seqNum} five times with no ACK")
+
+#Does a single try of receiving packet in a non-blocking way
+#Returns -1 if no packet found, else returns sequence number
+def receiveACK(serversocket):
+    try:
+        packet, address = serversocket.recvfrom(MAX_BYTES)
+        outerHeader, payload = decapsulate(packet)
+        header = struct.unpack_from("!cII",payload)
+        assert(header[0]=='A')
+        return header[1]
+    except socket.error as e:
+        err = e.args[0]
+        if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+            return -1
+        else:
+            # a "real" error occurred
+            print(e)
+            return -1
+
+
 
 def makeDataPacket(bytes, sequence_num):
     return struct.pack(f"!cII{len(bytes)}s",b'D',sequence_num,len(bytes),bytes)
@@ -58,7 +80,6 @@ def sendEnd(requesterIP,requesterPort,emulatorHostname,emulatorPort,priority,own
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
     packet = encapsulate(priority,ownIP,ownPort,requesterIP,requesterPort,makeEndPacket())
     sock.sendto(packet, (emulatorHostname, emulatorPort))
-
     
 def printData(address,sequence,section):
     print("DATA Packet")
@@ -77,6 +98,7 @@ def printEnd(address, sequence):
     print("length: ",0)
     print("payload: ")
     print("")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port")
@@ -94,6 +116,9 @@ if __name__ == "__main__":
     serversocket.bind((socket.gethostname(), int(args.port)))
     filename, address, window, header = receiveRequest(serversocket)
     sequence = 1
+
+    serversocket.setblocking(False)
+
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
         for i in range(0,len(bytes),int(args.length)):
