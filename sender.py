@@ -7,16 +7,6 @@ import time
 
 MAX_BYTES = 6000
 
-def receiveRequest(serversocket):
-    data, addr = serversocket.recvfrom(MAX_BYTES)
-    outHeader,payload = decapsulate(data)
-    request = struct.unpack_from("!cII",payload)
-    window = request[2]
-    # fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
-    fileName = payload[9:].decode('utf-8')
-    print("file name recieved : "+fileName)
-    return fileName, addr, window, outHeader
-
 
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     print(src_ip)
@@ -37,6 +27,17 @@ def readFile(filename, b):
         while (byte := f.read(b)):
             bytearr.append(byte)
     return bytearr
+
+
+def receiveRequest(serversocket):
+    data, addr = serversocket.recvfrom(MAX_BYTES)
+    outHeader,payload = decapsulate(data)
+    request = struct.unpack_from("!cII",payload)
+    window = request[2]
+    # fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
+    fileName = payload[9:].decode('utf-8')
+    print("file name recieved : "+fileName)
+    return fileName, addr, window, outHeader
 
 
 def makeDataPacket(bytes, sequence_num):

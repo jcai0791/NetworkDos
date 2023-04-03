@@ -13,11 +13,13 @@ import errno
 MAX_BYTES = 6000
 PRIOQ = [[],[],[]]
 DELAYING = False
+
+#wraps inner packet (payload) with outer header
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     packet = struct.pack(f"!B4sH4sHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
     return packet
 
-
+#returns outer header and inner packet separately
 def decapsulate(packet):
     header = struct.unpack_from("!B4sH4sHI",packet)
     length = header[5]
@@ -28,6 +30,7 @@ def getType(data):
     h = struct.unpack_from("!cII",data)
     return h[0]
 
+#Parses routing table
 def parseTable(fileName, selfHostname, selfPort):
     with open(fileName, "r") as f:
         d = defaultdict(lambda : ("",0,0,0))
@@ -59,25 +62,26 @@ def log(packet, logFile, reason):
         f.write("Priority level: ",outerHeader[0],"\n")
         f.write("Payload Size: ",outerHeader[5]," Bytes\n")
         f.write("-"*50)
-        
-def forwardPacket(packet, nextHopIp, nextHopPort):
-    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
-    print("IP: ",nextHopIp)
-    print("Port: ",nextHopPort)
-    sock.sendto(packet,(nextHopIp,nextHopPort))
 
+#Sends packet to (ip,port)
+def forwardPacket(packet, ip, port):
+    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+    sock.sendto(packet,(ip,port))
+
+#next contains table information: nexthopIp, nexthopPort, Delay, loss probability
 async def sendPacket(next,packet,file,type):
     DELAYING = True
-    await asyncio.sleep(next[2])
-    if(type!='E' and random.randint(1,100)<=next[3]):
+    await asyncio.sleep(next[2]) #Is this seconds or millisecond?? TODO
+    if(type!='E' and random.randint(1,100)<=next[3]): #Step 6
         #drop packet
         log(packet,file,"Random Loss Occurred")
         DELAYING = False
         return
 
-    forwardPacket(packet, next[0], next[1])
+    forwardPacket(packet, next[0], next[1]) #Step 7
     DELAYING = False
             
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port")
@@ -93,9 +97,9 @@ if __name__ == "__main__":
     sock.setblocking(0)
 
 
-    
+    #main loop
     while(True):
-        try:
+        try: #Step 1
             packet, address = sock.recvfrom(MAX_BYTES)
         except socket.error as e:
             err = e.args[0]
@@ -111,17 +115,17 @@ if __name__ == "__main__":
             destAdd = header[3]
             destPort = header[4]
             priority = header[0]
-            if(not table[(destAdd,destPort)]):
+            if(not table[(destAdd,destPort)]): #Step 2
                 log(packet,args.log,"No forwarding entry found")
                 continue
 
-            if(len(PRIOQ[priority-1]) < queue_size):
+            if(len(PRIOQ[priority-1]) < queue_size): #Step 3
                 PRIOQ[priority-1].append(packet)
             else:
                 log(packet,args.log, f"Queue {priority} full")
 
         #send
-        if(not DELAYING):
+        if(not DELAYING): #Step 4
             for prio in range(0,3):
                 if(PRIOQ[prio]):
                     sentPacket = PRIOQ[prio].pop()
@@ -129,7 +133,7 @@ if __name__ == "__main__":
                     destAdd = header[3]
                     destPort = header[4]
                     type = getType(payload)
-                    asyncio.run(sendPacket(table[(destAdd,destPort)],sentPacket,args.log,type))
+                    asyncio.run(sendPacket(table[(destAdd,destPort)],sentPacket,args.log,type)) # Step 5
                     break
 
 
