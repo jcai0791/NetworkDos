@@ -1,19 +1,19 @@
 Random Loss Occurred 
-Source Address: 127.0.0.1 Port: 2071
-Destination Address: 127.0.0.1 Port: 2072
-Time of Loss: 2023-04-04 05:47:23.492063
-Priority level: 1
-Payload Size: 9 Bytes
+Source Address: 128.105.37.229 Port: 2056
+Destination Address: 128.105.37.229 Port: 2055
+Time of Loss: 2023-04-04 21:32:51.398904
+Priority level: 3
+Payload Size: 19 Bytes
 --------------------------------------------------Random Loss Occurred 
-Source Address: 127.0.0.1 Port: 2071
-Destination Address: 127.0.0.1 Port: 2072
-Time of Loss: 2023-04-04 05:47:23.512402
-Priority level: 1
-Payload Size: 9 Bytes
+Source Address: 128.105.37.229 Port: 2056
+Destination Address: 128.105.37.229 Port: 2055
+Time of Loss: 2023-04-04 21:32:52.102868
+Priority level: 3
+Payload Size: 19 Bytes
 --------------------------------------------------Random Loss Occurred 
-Source Address: 127.0.0.1 Port: 2071
-Destination Address: 127.0.0.1 Port: 2072
-Time of Loss: 2023-04-04 05:47:24.582250
-Priority level: 1
-Payload Size: 9 Bytes
+Source Address: 128.105.37.229 Port: 2056
+Destination Address: 128.105.37.229 Port: 2055
+Time of Loss: 2023-04-04 21:32:52.506736
+Priority level: 3
+Payload Size: 19 Bytes
 --------------------------------------------------

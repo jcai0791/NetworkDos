@@ -41,7 +41,7 @@ def parseTable(fileName, selfHostname, selfPort):
                 destPort = int(row[3])
                 nextHost = socket.gethostbyname(row[4])
                 nextPort = int(row[5])
-                delay = int(row[6])
+                delay = int(row[6])/1000.0
                 lossProb = int(row[7])
                 d[(destHost, destPort)] = (nextHost,nextPort, delay, lossProb) 
         return d
@@ -64,17 +64,13 @@ def forwardPacket(packet, ip, port):
     sock.sendto(packet,(ip,port))
 
 #next contains table information: nexthopIp, nexthopPort, Delay, loss probability
-async def sendPacket(next,packet,file,type):
-    DELAYING = True
-    await asyncio.sleep(next[2]) #Is this seconds or millisecond?? TODO
-    if(type!='E' and random.randint(1,100)<=next[3]): #Step 6
+def sendPacket(next,packet,file,type):
+    if(type!=b'E' and random.randint(1,100)<=next[3]): #Step 6
         #drop packet
         log(packet,file,"Random Loss Occurred")
-        DELAYING = False
         return
-    #print(next, packet)
+    print(next,packet)
     forwardPacket(packet, next[0], next[1]) #Step 7
-    DELAYING = False
             
 
 if __name__ == "__main__":
@@ -89,13 +85,18 @@ if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.bind((socket.gethostname(), int(args.port)))
     sock.setblocking(0)
-
     #Clears log file on run
     with open(args.log, "w+") as f:
         pass
-
+    packets  = []
     #main loop
     while(True):
+        if(DELAYING and len(packets) > 0 and datetime.utcnow().timestamp() * 1000 >= packets[0][0]):
+            DELAYING=False
+            sendPacket(*packets[0][1:])
+            packets.pop()
+
+
         try: #Step 1
             packet, address = sock.recvfrom(MAX_BYTES)
 
@@ -103,7 +104,7 @@ if __name__ == "__main__":
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
                 #No packet received yet. Do step 4
-                continue
+                pass
             else:
                 # a "real" error occurred
                 print(e)
@@ -116,23 +117,24 @@ if __name__ == "__main__":
             if(not table[(destAdd,destPort)]): #Step 2
                 log(packet,args.log,"No forwarding entry found")
                 continue
-
-            if(len(PRIOQ[priority-1]) < queue_size): #Step 3
+            print(getType(payload) == b'E')
+            if(len(PRIOQ[priority-1]) < queue_size or getType(payload) == b'E'): #Step 3
                 PRIOQ[priority-1].append(packet)
             else:
                 log(packet,args.log, f"Queue {priority} full")
-
         #send
         if(not DELAYING): #Step 4
             for prio in range(0,3):
                 if(PRIOQ[prio]):
+                    DELAYING=True
                     sentPacket = PRIOQ[prio].pop()
                     header, payload = decapsulate(sentPacket)
                     destAdd = header[3]
                     destPort = header[4]
                     type = getType(payload)
-                    asyncio.run(sendPacket(table[(destAdd,destPort)],sentPacket,args.log,type)) # Step 5
+                    packets.append([(datetime.utcnow().timestamp() * 1000) + (table[(destAdd,destPort)][2]*1000), table[(destAdd,destPort)],sentPacket,args.log,type])
                     break
+
 
 
 

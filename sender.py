@@ -2,6 +2,7 @@ import argparse
 import socket
 import struct
 from datetime import datetime
+from datetime import timedelta
 import os
 import time
 import errno
@@ -45,56 +46,42 @@ def giveUp(seqNum):
 
 #Does a single try of receiving packet in a non-blocking way
 #Returns -1 if no packet found, else returns sequence number
-async def receiveACK(serversocket, seq_no):
-    while True:
-        if(ACKS[seq_no]):
-             return seq_no
-        try:
-            lock = asyncio.Lock()
-            async with lock:
-                packet, address = serversocket.recvfrom(MAX_BYTES)
-                outerHeader, payload = decapsulate(packet)
-                header = struct.unpack_from("!cII",payload)
-                ACKS[header[1]] = True
-
-        except socket.error as e:
-            err = e.args[0] 
-            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                pass
-            else:
-                # a "real" error occurred
-                print(e)
-        await asyncio.sleep(0)
-
-
-async def timeout(seq_no, serversocket, t):
-    try:
-       await asyncio.wait_for(receiveACK(serversocket, seq_no), timeout=int(t))
-       return 0
-    except asyncio.TimeoutError:
-        return -1
-    return 0
-
-async def main(seq_no, serversocket, t):
-    return await asyncio.gather(*[asyncio.create_task(timeout(i, serversocket, t)) for i in seq_no])
-
 # def receiveACK(serversocket, seq_no):
-#     try:
-#         packet, address = serversocket.recvfrom(MAX_BYTES)
-#         outerHeader, payload = decapsulate(packet)
-#         header = struct.unpack_from("!cII",payload)
-#         assert(header[0]== b'A')
-#         ACKS[header[1]] = True
 #         if(ACKS[seq_no]):
-#             return seq_no
-#     except socket.error as e:
-#         err = e.args[0] 
-#         if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-#             pass
-#         else:
-#             # a "real" error occurred
-#             print(e)
-#     await()
+#              return seq_no
+#         try:
+#             lock = asyncio.Lock()
+#             async with lock:
+#                 packet, address = serversocket.recvfrom(MAX_BYTES)
+#                 outerHeader, payload = decapsulate(packet)
+#                 header = struct.unpack_from("!cII",payload)
+#                 ACKS[header[1]] = True
+
+#         except socket.error as e:
+#             err = e.args[0] 
+#             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+#                 pass
+#             else:
+#                 # a "real" error occurred
+#                 print(e)
+#         await asyncio.sleep(0)
+
+
+
+def receiveACK(serversocket):
+    try:
+        packet, address = serversocket.recvfrom(MAX_BYTES)
+        outerHeader, payload = decapsulate(packet)
+        header = struct.unpack_from("!cII",payload)
+        assert(header[0]== b'A')
+        ACKS[header[1]] = True
+    except socket.error as e:
+        err = e.args[0] 
+        if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+            pass
+        else:
+            # a "real" error occurred
+            print(e)
 
 
 def makeDataPacket(bytes, sequence_num):
@@ -162,38 +149,51 @@ if __name__ == "__main__":
 
     filename, address, window, header = receiveRequest(serversocket)
     serversocket.setblocking(False)
-
+    timeoutMilliseconds = int(args.timeout)
     totalTransmissions = 0
     normalTransmissions = 0
 
     sequence = 1
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
-        buffer = [None for i in range(window)]
-        times = []
+        buffer = []
         for i in range(0,len(bytes),int(args.length)):
             normalTransmissions +=1
-            section = bytes[i:min(i+int(args.length),len(bytes))]
-            buffer[(sequence-1) % window] = makePacket(header[1],int(args.requester_port),section,sequence,int(args.priority),int(args.port))
+            totalTransmissions+=1
 
-            #printData(address,sequence,section)
-            if(sequence % window == 0 or i >= len(bytes) - int(args.length)):
-                j = 0
-                nums = [ k for k in range((((sequence-1)//window) * window) + 1, sequence + 1) ]
-                while len(nums) > 0 and j <= 5:
-                    res = asyncio.run(main(nums ,  serversocket, args.timeout))
-                    nums = [nums[k] for k, j in enumerate(res) if j == -1]
-                    #print(nums)
-                    for s in nums:
-                        print("Sending packet with sequence number ",s)
-                        sendPacket(args.f_hostname,int(args.f_port),buffer[(s-1) % window])
+            section = bytes[i:min(i+int(args.length),len(bytes))]
+            buffer.append(makePacket(header[1],int(args.requester_port),section,sequence,int(args.priority),int(args.port)))
+            sequence+=1
+        
+        times = [0 for i in range(len(buffer))]
+        resendCount = [0 for i in range(len(buffer))]
+        for w in range(0,len(buffer),window):
+            for i in range(w,min(w+window,len(buffer))):
+                sendPacket(args.f_hostname,int(args.f_port),buffer[i])
+                times[i] = datetime.utcnow().timestamp() * 1000
+                resendCount[i] = 0
+                time.sleep(1.0/int(args.rate))
+
+
+            done = False
+            
+            while(not done):
+                done = True
+                for i in range(w,min(w+window,len(buffer))):
+                    now = datetime.utcnow().timestamp() * 1000
+                    receiveACK(serversocket)
+                    if(not ACKS[i+1] and resendCount[i] <= 5):
+                        done = False
+                    if(not ACKS[i+1] and resendCount[i] <5 and now - times[i]>timeoutMilliseconds):
                         totalTransmissions+=1
-                        time.sleep(1.0/int(args.rate))
-                    j+=1
-                for s in nums:
-                    giveUp(s)
-            sequence += 1
-            time.sleep(1.0/int(args.rate))
+                        sendPacket(args.f_hostname,int(args.f_port),buffer[i])
+                        times[i] = datetime.utcnow().timestamp() * 1000
+                        resendCount[i]+=1
+                        time.sleep(1.0/int(args.rate))  
+                        if(resendCount[i]==5):
+                            giveUp(i+1)
+
+            print("DONE!")
 
 
                 

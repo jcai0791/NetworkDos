@@ -1,0 +1,3 @@
+royal-25 2051 royal-25 2049 royal-25 2049 0 0
+royal-25 2051 royal-25 2050 royal-25 2050 500 0
+royal-25 2051 royal-25 2052 royal-25 2052 500 0

@@ -135,6 +135,7 @@ if __name__ == "__main__":
         #hostname, port, 
         sendRequest(i[1],i[2],int(args.port),args.fileoption,window,args.f_hostname,f_port)
 
+
     senderTexts = receivePackets(sock,args.f_hostname,f_port,int(args.port),numSenders)
     for i in d[args.fileoption]:
         senderIP = socket.inet_aton(socket.gethostbyname(i[1]))
