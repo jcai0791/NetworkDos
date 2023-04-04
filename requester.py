@@ -5,7 +5,9 @@ import csv
 from datetime import datetime
 from datetime import timedelta
 from collections import defaultdict
+import collections
 import os 
+
 MAX_BYTES = 6000
 
  
@@ -58,7 +60,7 @@ def printEnd(address, sequence):
     print("payload: ")
     print("")
 
-def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMessages= defaultdict(lambda : [])):
+def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMessages= defaultdict(lambda : {})):
     end = 0
     text = ""
     totalPackets = 0
@@ -81,18 +83,18 @@ def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMe
         if header[0]==b'E':
             end +=1
             endTime = datetime.utcnow()
-            printEnd(addr,header[1])
+            # printEnd(addr,header[1])
             milliseconds = (endTime-startTime)/timedelta(milliseconds=1)
-            print("Summary")
-            print("sender addr: ",addr)
-            print("Total Data packets: ", totalPackets)
-            print("Total Data bytes: ", totalLength)
-            print("Average packets/second: ", totalPackets*1000/milliseconds)
-            print("Duration: ", milliseconds, " ms")
+            # print("Summary")
+            # print("sender addr: ",addr)
+            # print("Total Data packets: ", totalPackets)
+            # print("Total Data bytes: ", totalLength)
+            # print("Average packets/second: ", totalPackets*1000/milliseconds)
+            # print("Duration: ", milliseconds, " ms")
         else:
             received = struct.unpack_from(f"!{length}s",payload,offset=9)[0].decode('utf-8')
 
-            receivedMessages[(outerHeader[1],outerHeader[2])].append((header[1],received))
+            receivedMessages[(outerHeader[1],outerHeader[2])][header[1]] = received
             sendAck(outerHeader[1],outerHeader[2],ownPort,emulatorName,emulatorPort,header[1])
 
     return receivedMessages
@@ -137,9 +139,8 @@ if __name__ == "__main__":
     for i in d[args.fileoption]:
         senderIP = socket.inet_aton(socket.gethostbyname(i[1]))
         senderPort = i[2]
-        senderTexts[senderIP, senderPort] = sorted(senderTexts[senderIP, senderPort], key = lambda x : x[0])
-        for fragment in senderTexts[(senderIP,senderPort)]:
+        for key,fragment in collections.OrderedDict(sorted(senderTexts[senderIP, senderPort].items())).items():
             #fragment is (seqno, text)
             with open(args.fileoption, "a") as f:
-                f.write(fragment[1])
+                f.write(fragment)
 

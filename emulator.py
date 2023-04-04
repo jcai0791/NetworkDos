@@ -50,12 +50,12 @@ def parseTable(fileName, selfHostname, selfPort):
 def log(packet, logFile, reason):
     outerHeader,payload = decapsulate(packet)
     with open(logFile, "a") as f:
-        f.write(reason,"\n")
-        f.write("Source Address: ",socket.inet_ntoa(outerHeader[1])," Port: ",outerHeader[2],"\n")
-        f.write("Destination Address: ",socket.inet_ntoa(outerHeader[3])," Port: ",outerHeader[4],"\n")
-        f.write("Time of Loss: ",datetime.utcnow(),"\n")
-        f.write("Priority level: ",outerHeader[0],"\n")
-        f.write("Payload Size: ",outerHeader[5]," Bytes\n")
+        f.write(reason + " \n")
+        f.write("Source Address: "+ str(socket.inet_ntoa(outerHeader[1])) + " Port: " + str(outerHeader[2]) + "\n")
+        f.write("Destination Address: " + str(socket.inet_ntoa(outerHeader[3])) + " Port: "+ str(outerHeader[4]) + "\n")
+        f.write("Time of Loss: "+ str(datetime.utcnow()) + "\n")
+        f.write("Priority level: "+ str(outerHeader[0]) + "\n")
+        f.write("Payload Size: " + str(outerHeader[5]) + " Bytes\n")
         f.write("-"*50)
 
 #Sends packet to (ip,port)
@@ -72,7 +72,7 @@ async def sendPacket(next,packet,file,type):
         log(packet,file,"Random Loss Occurred")
         DELAYING = False
         return
-
+    print(next, packet)
     forwardPacket(packet, next[0], next[1]) #Step 7
     DELAYING = False
             
@@ -90,7 +90,6 @@ if __name__ == "__main__":
     sock.bind((socket.gethostname(), int(args.port)))
     sock.setblocking(0)
     #main loop
-    print(len(table))
     while(True):
         try: #Step 1
             packet, address = sock.recvfrom(MAX_BYTES)
