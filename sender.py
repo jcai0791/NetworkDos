@@ -7,7 +7,7 @@ import time
 import errno
 import asyncio
 MAX_BYTES = 6000
-
+ACKS = defaultdict(lambda : False)
  
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     print(src_ip)
@@ -52,8 +52,9 @@ async def receiveACK(serversocket, seq_no):
             outerHeader, payload = decapsulate(packet)
             header = struct.unpack_from("!cII",payload)
             assert(header[0]=='A')
-            if(header[1] == seq_no):
-                return header[1]
+            ACKS[header[1]] = True
+            if(ACKS[seq_no]):
+                return seq_no
         except socket.error as e:
             err = e.args[0] 
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
