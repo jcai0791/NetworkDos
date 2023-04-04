@@ -72,7 +72,7 @@ async def sendPacket(next,packet,file,type):
         log(packet,file,"Random Loss Occurred")
         DELAYING = False
         return
-    print(next, packet)
+    #print(next, packet)
     forwardPacket(packet, next[0], next[1]) #Step 7
     DELAYING = False
             
@@ -89,6 +89,11 @@ if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.bind((socket.gethostname(), int(args.port)))
     sock.setblocking(0)
+
+    #Clears log file on run
+    with open(args.log, "w+") as f:
+        pass
+
     #main loop
     while(True):
         try: #Step 1

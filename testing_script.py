@@ -25,26 +25,30 @@ def test1():
         f.write(f"file.txt 1 {socket.gethostname()} {s1}\n")
     with open("table1.txt", "w+") as f:
         f.write(f"{socket.gethostname()} {g1} {socket.gethostname()} {r1} {socket.gethostname()} {r1} 0 0\n")
-        f.write(f"{socket.gethostname()} {g1} {socket.gethostname()} {s1} {socket.gethostname()} {s1} 0 60\n")
+        f.write(f"{socket.gethostname()} {g1} {socket.gethostname()} {s1} {socket.gethostname()} {s1} 0 20\n")
 
     output = sys.stdout
     os.chdir("sender")
+    print("Running Sender")
     subprocess.Popen(['python3', '../../sender.py',"-p", s1, "-g" , r1, "-r", "100", "-q", "1", "-l" , "10", "-f" , socket.gethostname(), "-e" , g1, "-i", "3" , "-t", "1"], stdout=output, stderr=subprocess.STDOUT)
     os.chdir('..')
 
-    time.sleep(.5)
+    time.sleep(1)
+    print("Running emulator")
     subprocess.Popen(['python3', '../emulator.py', "-p", g1, "-q", "100" , "-f", "table1.txt", "-l", "log"], stdout=output, stderr=subprocess.STDOUT)
-    time.sleep(.5)
+    time.sleep(1)
+    print("Running requester")
     os.chdir("requester")
     subprocess.Popen(['python3', "../../requester.py", "-p", r1, "-f",socket.gethostname(), "-e", g1, "-o" , "file.txt", "-w", "10"], stdout=output, stderr=subprocess.STDOUT)
 
-    time.sleep(5)
+    time.sleep(10)
     sys.stdout.flush()
     p = subprocess.Popen(["diff", "file.txt", "../sender/file.txt"], stdout=subprocess.PIPE)
     out, err = p.communicate()
     if out == None or len(out) == 0:
         subprocess.Popen(["echo", "-e" , "\e[92mtest 1 passed\e[0m"])
     else:
+        print(out)
         subprocess.Popen(["echo", "-e" , "\e[31mtest 1 failed\e[0m"])
 
 def test2():

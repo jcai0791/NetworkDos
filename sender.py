@@ -103,12 +103,23 @@ def makeDataPacket(bytes, sequence_num):
 def makeEndPacket():
     return struct.pack(f"!cII",b'E',0,0)
 
-def sendData(requesterIP,requesterPort,emulatorHostname,emulatorPort, bytes, sequence_num,priority,ownPort):
-    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+# def sendData(requesterIP,requesterPort,emulatorHostname,emulatorPort, bytes, sequence_num,priority,ownPort):
+#     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
+#     payload = makeDataPacket(bytes,sequence_num)
+#     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
+#     packet = encapsulate(priority,ownIP,ownPort,requesterIP,requesterPort,payload)
+#     sock.sendto(packet, (emulatorHostname, emulatorPort))
+
+def makePacket(requesterIP,requesterPort, bytes, sequence_num,priority,ownPort):
     payload = makeDataPacket(bytes,sequence_num)
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
     packet = encapsulate(priority,ownIP,ownPort,requesterIP,requesterPort,payload)
+    return packet
+
+def sendPacket(emulatorHostname,emulatorPort,packet):
+    sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.sendto(packet, (emulatorHostname, emulatorPort))
+
 
 def sendEnd(requesterIP,requesterPort,emulatorHostname,emulatorPort,priority,ownPort):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
@@ -152,17 +163,19 @@ if __name__ == "__main__":
     filename, address, window, header = receiveRequest(serversocket)
     serversocket.setblocking(False)
 
+    totalTransmissions = 0
+    normalTransmissions = 0
+
     sequence = 1
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
         buffer = [None for i in range(window)]
         times = []
         for i in range(0,len(bytes),int(args.length)):
+            normalTransmissions +=1
             section = bytes[i:min(i+int(args.length),len(bytes))]
-            sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),section,sequence,int(args.priority),int(args.port))
-            buffer[(sequence-1) % window] = section
-            
-            #print(sequence, i , len(bytes))
+            buffer[(sequence-1) % window] = makePacket(header[1],int(args.requester_port),section,sequence,int(args.priority),int(args.port))
+
             #printData(address,sequence,section)
             if(sequence % window == 0 or i >= len(bytes) - int(args.length)):
                 j = 0
@@ -170,9 +183,11 @@ if __name__ == "__main__":
                 while len(nums) > 0 and j <= 5:
                     res = asyncio.run(main(nums ,  serversocket, args.timeout))
                     nums = [nums[k] for k, j in enumerate(res) if j == -1]
-                    print(nums)
+                    #print(nums)
                     for s in nums:
-                        sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),buffer[(s-1) % window],s,int(args.priority),int(args.port))
+                        print("Sending packet with sequence number ",s)
+                        sendPacket(args.f_hostname,int(args.f_port),buffer[(s-1) % window])
+                        totalTransmissions+=1
                         time.sleep(1.0/int(args.rate))
                     j+=1
                 for s in nums:
@@ -185,7 +200,7 @@ if __name__ == "__main__":
         sendEnd(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),int(args.priority),int(args.port))
         #printEnd(address,sequence)
 
-    #print("Percent of packets lost: !!!!!Bruh Moment!!!!!")
+    print("Percent of packets lost: ",(totalTransmissions-normalTransmissions)/totalTransmissions*100,"%")
         
 
     serversocket.close()
