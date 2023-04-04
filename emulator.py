@@ -86,16 +86,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     queue_size = int(args.queue_size)
     table = parseTable(args.filename,socket.gethostname(),int(args.port))
-
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.bind((socket.gethostname(), int(args.port)))
     sock.setblocking(0)
-
-
     #main loop
+    print(len(table))
     while(True):
         try: #Step 1
             packet, address = sock.recvfrom(MAX_BYTES)
+
         except socket.error as e:
             err = e.args[0]
             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:

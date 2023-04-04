@@ -19,7 +19,7 @@ def sendRequest(destHostname,destPort, srcPort, filename,window, emulatorName, e
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
     packet = encapsulate(1,ownIP,srcPort,socket.inet_aton(socket.gethostbyname(destHostname)),destPort,payload)
     sock.sendto(packet, (emulatorName, emulatorPort))
-
+    
 def makeAckPacket(sequenceNum):
     return struct.pack(f"!cII",b'A',sequenceNum,0)
 
@@ -124,14 +124,15 @@ if __name__ == "__main__":
     f_port = int(args.f_port)
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.bind((socket.gethostname(), int(args.port)))
-
     with open(args.fileoption, "w+") as f:
         pass
     numSenders = len(d[args.fileoption])
     for i in d[args.fileoption]:
         id = i[0]
-        #hostname, port, filename
+
+        #hostname, port, 
         sendRequest(i[1],i[2],int(args.port),args.fileoption,window,args.f_hostname,f_port)
+
     senderTexts = receivePackets(sock,args.f_hostname,f_port,int(args.port),numSenders)
     for i in d[args.fileoption]:
         senderIP = socket.inet_aton(socket.gethostbyname(i[1]))

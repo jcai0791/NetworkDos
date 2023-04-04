@@ -6,6 +6,7 @@ import os
 import time
 import errno
 import asyncio
+from collections import defaultdict
 MAX_BYTES = 6000
 ACKS = defaultdict(lambda : False)
  
@@ -127,31 +128,31 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--priority")
     parser.add_argument("-t", "--timeout")
     args = parser.parse_args()
-    
     serversocket = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     serversocket.bind((socket.gethostname(), int(args.port)))
+    print("SENDER ONLINE")
+
     filename, address, window, header = receiveRequest(serversocket)
     serversocket.setblocking(False)
 
     sequence = 1
-
-
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
         buffer = [None for i in range(window)]
         for i in range(0,len(bytes),int(args.length)):
             section = bytes[i:min(i+int(args.length),len(bytes))]
-            buffer[sequence-1 % window] = lambda : sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),section,sequence,int(args.priority),int(args.port))
-            buffer[sequence-1 % window]()
+            buffer[(sequence-1) % window] = lambda : sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),section,sequence,int(args.priority),int(args.port))
+            buffer[(sequence-1) % window]()
             printData(address,sequence,section)
-            if(i % window == 0 or i == int(args.length) - len(bytes)):
+            if(sequence % window == 0 or i == int(args.length) - len(bytes)):
                 j = 0
-                sequence = [sequence-window + i + 1 for i in range(window) ]
-                while len(sequence) == 0 or j >= 5:
-                    res = asyncio.run(main(sequence ,  serversocket, args.timeout))
-                    sequence = [sequence[i] for i, j in enumerate(res) if j == -1]
-                    map(lambda x: buffer[x-1](), sequence)
-                for i in sequence:
+                nums = [sequence-window + i + 1 for i in range(window) ]
+                while len(nums) == 0 or j >= 5:
+                    res = asyncio.run(main(nums ,  serversocket, args.timeout))
+                    print(res)
+                    nums = [nums[i] for i, j in enumerate(res) if j == -1]
+                    map(lambda x: [buffer[x-1](),time.sleep(1.0/int(args.rate))], nums)
+                for i in nums:
                     giveUp(i)
 
             sequence += 1

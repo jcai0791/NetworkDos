@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/home/aidenc/NetworkDos/test1/../emulator.py", line 95, in <module>
+    packet, address = sock.recvfrom(MAX_BYTES)
+BlockingIOError: [Errno 11] Resource temporarily unavailable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/aidenc/NetworkDos/test1/../emulator.py", line 95, in <module>
+    packet, address = sock.recvfrom(MAX_BYTES)
+KeyboardInterrupt
