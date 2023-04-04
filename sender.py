@@ -5,9 +5,10 @@ from datetime import datetime
 import os
 import time
 import errno
+import asyncio
 MAX_BYTES = 6000
 
-
+ 
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     print(src_ip)
     print(dest_ip)
@@ -44,22 +45,23 @@ def giveUp(seqNum):
 
 #Does a single try of receiving packet in a non-blocking way
 #Returns -1 if no packet found, else returns sequence number
-def receiveACK(serversocket):
-    try:
-        packet, address = serversocket.recvfrom(MAX_BYTES)
-        outerHeader, payload = decapsulate(packet)
-        header = struct.unpack_from("!cII",payload)
-        assert(header[0]=='A')
-        return header[1]
-    except socket.error as e:
-        err = e.args[0]
-        if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-            return -1
-        else:
-            # a "real" error occurred
-            print(e)
-            return -1
-
+async def receiveACK(serversocket, seq_no):
+    while True:
+        try:
+            packet, address = serversocket.recvfrom(MAX_BYTES)
+            outerHeader, payload = decapsulate(packet)
+            header = struct.unpack_from("!cII",payload)
+            assert(header[0]=='A')
+            if(header[1] == seq_no):
+                return header[1]
+        except socket.error as e:
+            err = e.args[0] 
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                pass
+            else:
+                # a "real" error occurred
+                print(e)
+        await asyncio.sleep(0)
 
 
 def makeDataPacket(bytes, sequence_num):
@@ -99,6 +101,19 @@ def printEnd(address, sequence):
     print("payload: ")
     print("")
 
+async def timeout(seq_no, serversocket, t):
+    try:
+        async with asyncio.timeout(t) as cm:
+            result=await receiveACK(serversocket, seq_no)
+    except TimeoutError:
+        pass
+    if(cm.expired()):
+        return -1
+    else:
+        return 0
+
+async def main(seq_no, serversocket, t):
+    return await asyncio.gather(*[timeout(i, seversocket, t) for i in seq_no])
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port")
@@ -115,18 +130,34 @@ if __name__ == "__main__":
     serversocket = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     serversocket.bind((socket.gethostname(), int(args.port)))
     filename, address, window, header = receiveRequest(serversocket)
+    serversocket.setblocking(False)
+
     sequence = 1
 
-    serversocket.setblocking(False)
 
     with open(filename,"r+b") as file:
         bytes = bytearray(file.read())
+        buffer = [None for i in range(window)]
         for i in range(0,len(bytes),int(args.length)):
             section = bytes[i:min(i+int(args.length),len(bytes))]
-            sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),section,sequence,int(args.priority),int(args.port))
+            buffer[sequence-1 % window] = lambda : sendData(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),section,sequence,int(args.priority),int(args.port))
+            buffer[sequence-1 % window]()
             printData(address,sequence,section)
+            if(i % window == 0 or i == int(args.length) - len(bytes)):
+                j = 0
+                sequence = [sequence-window + i + 1 for i in range(window) ]
+                while len(sequence) == 0 or j >= 5:
+                    res = asyncio.run(main(sequence ,  serversocket, args.timeout))
+                    sequence = [sequence[i] for i, j in enumerate(res) if j == -1]
+                    map(lambda x: buffer[x-1](), sequence)
+                for i in sequence:
+                    giveUp(i)
+
             sequence += 1
             time.sleep(1.0/int(args.rate))
+
+
+                
         sendEnd(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),int(args.priority),int(args.port))
         printEnd(address,sequence)
 

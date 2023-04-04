@@ -8,7 +8,7 @@ from collections import defaultdict
 import os 
 MAX_BYTES = 6000
 
-
+ 
 def makeRequestPacket(filename,window):
     byteString =bytes(filename,'utf-8')
     return struct.pack(f"!cII{len(byteString)}s",b'R',0,window,byteString)
