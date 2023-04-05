@@ -56,6 +56,7 @@ def log(packet, logFile, reason):
         f.write("Priority level: "+ str(outerHeader[0]) + "\n")
         f.write("Payload Size: " + str(outerHeader[5]) + " Bytes\n")
         f.write("-"*50)
+        f.write("\n\n")
 
 #Sends packet to (ip,port)
 def forwardPacket(packet, ip, port):
@@ -68,6 +69,7 @@ def sendPacket(next,packet,file,type):
         #drop packet
         log(packet,file,"Random Loss Occurred")
         return
+    # print("Sent Packet ",packet)
     #print(next,packet)
     forwardPacket(packet, next[0], next[1]) #Step 7
             
@@ -93,7 +95,7 @@ if __name__ == "__main__":
         if(DELAYING and len(packets) > 0 and datetime.utcnow().timestamp() * 1000 >= packets[0][0]):
             DELAYING=False
             sendPacket(*packets[0][1:])
-            packets.pop()
+            packets.pop(0)
 
 
         try: #Step 1
@@ -113,6 +115,7 @@ if __name__ == "__main__":
             destAdd = header[3]
             destPort = header[4]
             priority = header[0]
+            # print("Received Packet ", payload)
             if(not table[(destAdd,destPort)]): #Step 2
                 log(packet,args.log,"No forwarding entry found")
                 continue
@@ -132,12 +135,3 @@ if __name__ == "__main__":
                     type = getType(payload)
                     packets.append([(datetime.utcnow().timestamp() * 1000) + (table[(destAdd,destPort)][2]*1000), table[(destAdd,destPort)],sentPacket,args.log,type])
                     break
-
-
-
-
-
-            
-
-
-    

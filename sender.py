@@ -9,6 +9,8 @@ import errno
 from collections import defaultdict
 MAX_BYTES = 6000
 ACKS = defaultdict(lambda : False)
+
+SUPRESSOUTPUT = True
  
 def encapsulate(priority, src_ip, src_port, dest_ip, dest_port,payload):
     packet = struct.pack(f"!B4sH4sHI{len(payload)}s",priority,src_ip,src_port,dest_ip,dest_port,len(payload),payload)
@@ -36,36 +38,14 @@ def receiveRequest(serversocket):
     window = request[2]
     # fileName = struct.unpack_from(f"!{length}s",data,offset=9)[0].decode('utf-8')
     fileName = payload[9:].decode('utf-8')
-    print("file name recieved : "+fileName)
+    #print("file name recieved : "+fileName)
     return fileName, addr, window, outHeader
 
 def giveUp(seqNum):
     print(f"Error: Retried sending packet {seqNum} five times with no ACK")
 
 #Does a single try of receiving packet in a non-blocking way
-#Returns -1 if no packet found, else returns sequence number
-# def receiveACK(serversocket, seq_no):
-#         if(ACKS[seq_no]):
-#              return seq_no
-#         try:
-#             lock = asyncio.Lock()
-#             async with lock:
-#                 packet, address = serversocket.recvfrom(MAX_BYTES)
-#                 outerHeader, payload = decapsulate(packet)
-#                 header = struct.unpack_from("!cII",payload)
-#                 ACKS[header[1]] = True
-
-#         except socket.error as e:
-#             err = e.args[0] 
-#             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-#                 pass
-#             else:
-#                 # a "real" error occurred
-#                 print(e)
-#         await asyncio.sleep(0)
-
-
-
+#Updates ACKS if packet found
 def receiveACK(serversocket):
     try:
         packet, address = serversocket.recvfrom(MAX_BYTES)
@@ -88,13 +68,6 @@ def makeDataPacket(bytes, sequence_num):
 def makeEndPacket():
     return struct.pack(f"!cII",b'E',0,0)
 
-# def sendData(requesterIP,requesterPort,emulatorHostname,emulatorPort, bytes, sequence_num,priority,ownPort):
-#     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
-#     payload = makeDataPacket(bytes,sequence_num)
-#     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
-#     packet = encapsulate(priority,ownIP,ownPort,requesterIP,requesterPort,payload)
-#     sock.sendto(packet, (emulatorHostname, emulatorPort))
-
 def makePacket(requesterIP,requesterPort, bytes, sequence_num,priority,ownPort):
     payload = makeDataPacket(bytes,sequence_num)
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
@@ -105,13 +78,21 @@ def sendPacket(emulatorHostname,emulatorPort,packet):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     sock.sendto(packet, (emulatorHostname, emulatorPort))
 
+    #Print information
+    if(not SUPRESSOUTPUT):
+        header,payload = decapsulate(packet)
+        innerHeader = struct.unpack_from("!cII",payload)
+        section = payload[9:]
+        printData(socket.inet_ntoa(header[3]),innerHeader[1],section)
+
 
 def sendEnd(requesterIP,requesterPort,emulatorHostname,emulatorPort,priority,ownPort):
     sock = socket.socket(socket.AF_INET,  socket.SOCK_DGRAM)
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
     packet = encapsulate(priority,ownIP,ownPort,requesterIP,requesterPort,makeEndPacket())
     sock.sendto(packet, (emulatorHostname, emulatorPort))
-    
+        
+
 def printData(address,sequence,section):
     print("DATA Packet")
     print("send time: ",datetime.utcnow())
@@ -183,6 +164,7 @@ if __name__ == "__main__":
                     if(not ACKS[i+1] and resendCount[i] <= 5):
                         done = False
                     if(not ACKS[i+1] and resendCount[i] <5 and now - times[i]>timeoutMilliseconds):
+                        # print("Resending packet ",i+1)
                         totalTransmissions+=1
                         sendPacket(args.f_hostname,int(args.f_port),buffer[i])
                         times[i] = datetime.utcnow().timestamp() * 1000
@@ -196,7 +178,8 @@ if __name__ == "__main__":
 
                 
         sendEnd(header[1],int(args.requester_port),args.f_hostname,int(args.f_port),int(args.priority),int(args.port))
-        #printEnd(address,sequence)
+        if(not SUPRESSOUTPUT): 
+            printEnd(address,sequence)
 
     print("Percent of packets lost: ",(totalTransmissions-normalTransmissions)/totalTransmissions*100,"%")
         

@@ -42,33 +42,22 @@ def decapsulate(packet):
     payload = struct.unpack_from(f"!{length}s",packet,offset=17)[0]
     return header,payload
 
-def printData(address,sequence,section):
-    print("DATA Packet")
-    print("send time: ",datetime.utcnow())
-    print("requester addr: ",address)
-    print("Sequence num: ",sequence)
-    print("length: ",len(section))
-    print("payload: ",section.decode('utf-8')[0:min(len(section),4)])
-    print("")
 
 def printEnd(address, sequence):
     print("END Packet")
     print("send time: ",datetime.utcnow())
     print("requester addr: ",address)
     print("Sequence num: ",sequence)
-    print("length: ",0)
-    print("payload: ")
+    #print("length: ",0)
+    #print("payload: ")
     print("")
 
 def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMessages= defaultdict(lambda : {})):
     end = 0
-    text = ""
-    totalPackets = 0
-    totalLength = 0
+    totalLengths = defaultdict(lambda : 0)
+    totalPackets = defaultdict(lambda : 0)
     startTime = datetime.utcnow()
     ownIP = socket.inet_aton(socket.gethostbyname(socket.gethostname()))
-    #sock.setblocking(0)
-
 
     #[(sourceAdd,sourcePort)][SeqNo][Text]
     while end!=numSenders:
@@ -78,19 +67,20 @@ def receivePackets(sock,emulatorName,emulatorPort,ownPort,numSenders, receivedMe
             continue
         header = struct.unpack_from("!cII",payload)
         length = header[2]
-        totalPackets+=1 if header[0] != b'E' else 0
-        totalLength+=length
+        totalLengths[(outerHeader[1],outerHeader[2])] += length
+        totalPackets[(outerHeader[1],outerHeader[2])]+= 1 if header[0]!=b'E' else 0
         if header[0]==b'E':
             end +=1
             endTime = datetime.utcnow()
-            # printEnd(addr,header[1])
+            printEnd(socket.inet_ntoa(outerHeader[1]),header[1])
             milliseconds = (endTime-startTime)/timedelta(milliseconds=1)
-            # print("Summary")
-            # print("sender addr: ",addr)
-            # print("Total Data packets: ", totalPackets)
-            # print("Total Data bytes: ", totalLength)
-            # print("Average packets/second: ", totalPackets*1000/milliseconds)
-            # print("Duration: ", milliseconds, " ms")
+            print("-------SUMMARY-------")
+            print("Sender addr: ",socket.inet_ntoa(outerHeader[1]))
+            print("Total Data packets: ", totalPackets[(outerHeader[1],outerHeader[2])])
+            print("Total Data bytes: ", totalLengths[(outerHeader[1],outerHeader[2])])
+            print("Average packets/second: ", totalPackets[(outerHeader[1],outerHeader[2])]*1000/milliseconds)
+            print("Duration: ", milliseconds, " ms")
+            print("--------------------\n")
         else:
             received = struct.unpack_from(f"!{length}s",payload,offset=9)[0].decode('utf-8')
 
