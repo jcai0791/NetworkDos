@@ -6,8 +6,6 @@ from datetime import timedelta
 import os
 import time
 import errno
-import asyncio
-import copy
 from collections import defaultdict
 MAX_BYTES = 6000
 ACKS = defaultdict(lambda : False)
@@ -193,7 +191,7 @@ if __name__ == "__main__":
                         if(resendCount[i]==5):
                             giveUp(i+1)
 
-            print("DONE!")
+            #print("DONE!")
 
 
                 

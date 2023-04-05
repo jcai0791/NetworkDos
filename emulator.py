@@ -7,7 +7,6 @@ from datetime import datetime
 from datetime import timedelta
 from collections import defaultdict
 import os 
-import asyncio
 import errno
 
 MAX_BYTES = 6000
@@ -69,7 +68,7 @@ def sendPacket(next,packet,file,type):
         #drop packet
         log(packet,file,"Random Loss Occurred")
         return
-    print(next,packet)
+    #print(next,packet)
     forwardPacket(packet, next[0], next[1]) #Step 7
             
 
@@ -117,7 +116,6 @@ if __name__ == "__main__":
             if(not table[(destAdd,destPort)]): #Step 2
                 log(packet,args.log,"No forwarding entry found")
                 continue
-            print(getType(payload) == b'E')
             if(len(PRIOQ[priority-1]) < queue_size or getType(payload) == b'E'): #Step 3
                 PRIOQ[priority-1].append(packet)
             else:
@@ -127,7 +125,7 @@ if __name__ == "__main__":
             for prio in range(0,3):
                 if(PRIOQ[prio]):
                     DELAYING=True
-                    sentPacket = PRIOQ[prio].pop()
+                    sentPacket = PRIOQ[prio].pop(0)
                     header, payload = decapsulate(sentPacket)
                     destAdd = header[3]
                     destPort = header[4]
